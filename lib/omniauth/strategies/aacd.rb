@@ -1,4 +1,5 @@
 require 'omniauth-oauth2'
+require 'rest_client'
 
 module OmniAuth
   module Strategies
@@ -95,16 +96,16 @@ module OmniAuth
         "#{options.client_options.site}#{options.client_options.authorize_url}"
       end
 
+      def is_member?
+        raw_info['MemberLevel'] != 'None'
+      end
+
       def method_lookup
         'blueSkyLookup'
       end
 
       def module_name
         'aacd.websiteforms'
-      end
-
-      def is_member?
-        raw_info['MemberLevel'] != 'None'
       end
 
       def user_info_url
