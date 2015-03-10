@@ -1,5 +1,4 @@
 require 'omniauth-oauth2'
-require 'rest_client'
 
 module OmniAuth
   module Strategies
@@ -7,9 +6,11 @@ module OmniAuth
       option :name, 'aacd'
 
       option :client_options, {
-        user_info_url: 'http://portal.nasn.org/Bluesky/service.asmx/Bluesky_Authenticate_NASN_Token',
-        authorize_url: 'http://portal.nasn.org/members_online/members/path_login.asp',
-        authentication_token: 'MUST BE SET'
+        site: 'http://www.aacd.com',
+        user_info_url: '/wsAPI.php',
+        authorize_url: '/index.php?module=aacd.websiteforms&cmd=bluesky',
+        username: 'MUST BE SET',
+        password: 'MUST BE SET'
       }
 
       uid { raw_info[:id] }
@@ -29,16 +30,14 @@ module OmniAuth
 
       def request_phase
         slug = session['omniauth.params']['origin'].gsub(/\//,"")
-        redirect authorize_url + "?ReturnUrl=" + CGI.escape(callback_url + "?slug=#{slug}")
+        redirect authorize_url + "&redirectURL=" + callback_url + "?slug=#{slug}"
       end
 
       def callback_phase
         self.access_token = {
-          :token =>  request.params['str_token'],
+          :token =>  request.params['token'],
           :token_expires => 60
         }
-        puts "!!!! AUTH = #{self.env['omniauth.auth'].inspect}"
-        puts "!!!! ORIGIN = #{self.env['omniauth.origin'].inspect}"
         self.env['omniauth.auth'] = auth_hash
         call_app!
       end
@@ -60,16 +59,30 @@ module OmniAuth
       end
 
       def get_user_info
-        response = RestClient.get(user_info_url, params: { str_token: access_token[:token], str_security_key: authentication_token })
-        response = Nokogiri::XML response
+        response = RestClient.get(user_info_url,
+          { params:
+            { 'module' => module_name,
+              'method' => method_lookup,
+              'username' => options.client_options.username,
+              'password' => options.client_options.password,
+              'token' => access_token[:token]
+            }
+          }
+        )
 
-        info = {
-          id: response.xpath('//status_id').text,
-          first_name: response.xpath('//first_name').text,
-          last_name: response.xpath('//last_name').text,
-          email: response.xpath('//email').text,
-          is_member: response.xpath('//isMember').text
-        }
+        parsed_response = JSON.parse(response)
+
+        if parsed_response['message'] == 'Success'
+          info = {
+            id: parsed_response['data']['IMIS'],
+            first_name: parsed_response['data']['FirstName'],
+            last_name: parsed_response['data']['LastName'],
+            email: parsed_response['data']['Email'],
+            member_level: parsed_response['data']['MemberLevel']
+          }
+        else
+          nil
+        end
       end
 
       private
@@ -79,15 +92,23 @@ module OmniAuth
       end
 
       def authorize_url
-        options.client_options.authorize_url
+        "#{options.client_options.site}#{options.client_options.authorize_url}"
+      end
+
+      def method_lookup
+        'blueSkyLookup'
+      end
+
+      def module_name
+        'aacd.websiteforms'
       end
 
       def is_member?
-        raw_info[:is_member] == 'Y'
+        raw_info['MemberLevel'] != 'None'
       end
 
       def user_info_url
-        options.client_options.user_info_url
+        "#{options.client_options.site}#{options.client_options.user_info_url}"
       end
     end
   end
