@@ -21,7 +21,7 @@ module OmniAuth
           first_name: raw_info[:first_name],
           last_name: raw_info[:last_name],
           email: raw_info[:email],
-          is_member: is_member?
+          member_level: raw_info[:member_level]
         }
       end
 
@@ -94,10 +94,6 @@ module OmniAuth
 
       def authorize_url
         "#{options.client_options.site}#{options.client_options.authorize_url}"
-      end
-
-      def is_member?
-        raw_info['MemberLevel'] != 'None'
       end
 
       def method_lookup
