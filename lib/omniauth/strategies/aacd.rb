@@ -21,6 +21,7 @@ module OmniAuth
           first_name: raw_info[:first_name],
           last_name: raw_info[:last_name],
           email: raw_info[:email],
+          imis_id: uid,
           member_level: raw_info[:member_level]
         }
       end
