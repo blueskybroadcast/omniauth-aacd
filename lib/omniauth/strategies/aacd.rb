@@ -89,10 +89,6 @@ module OmniAuth
 
       private
 
-      def authentication_token
-        options.client_options.authentication_token
-      end
-
       def authorize_url
         "#{options.client_options.site}#{options.client_options.authorize_url}"
       end
