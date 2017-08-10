@@ -6,6 +6,8 @@ module OmniAuth
     class Aacd < OmniAuth::Strategies::OAuth2
       option :name, 'aacd'
 
+      option :app_options, { app_event_id: nil }
+
       option :client_options, {
         site: 'http://www.aacd.com',
         user_info_url: '/wsAPI.php',
@@ -36,11 +38,15 @@ module OmniAuth
       end
 
       def callback_phase
+        slug = request.params['slug']
+        account = Account.find_by(slug: slug)
+        @app_event = account.app_events.where(id: options.app_options.app_event_id).first_or_create(activity_type: 'sso')
         self.access_token = {
           :token =>  request.params['token'],
           :token_expires => 60
         }
         self.env['omniauth.auth'] = auth_hash
+        self.env['omniauth.app_event_id'] = @app_event.id
         call_app!
       end
 
@@ -61,6 +67,9 @@ module OmniAuth
       end
 
       def get_user_info
+        request_log = "AACD Authentication Request:\nGET #{user_info_url}, params: { token: #{access_token[:token]} }"
+        @app_event.logs.create(level: 'info', text: request_log)
+
         response = RestClient.get(user_info_url,
           { params:
             { 'module' => module_name,
@@ -74,7 +83,10 @@ module OmniAuth
 
         parsed_response = JSON.parse(response)
 
+        response_log = "AACD Authentication Response (code: #{response&.code}): \n#{parsed_response}"
+
         if parsed_response['message'] == 'Success'
+          @app_event.logs.create(level: 'info', text: response_log)
           info = {
             id: parsed_response['data']['IMIS'],
             first_name: parsed_response['data']['FirstName'],
@@ -82,7 +94,11 @@ module OmniAuth
             email: parsed_response['data']['Email'],
             member_level: parsed_response['data']['MemberLevel']
           }
+          finalize_app_event(info)
+          info
         else
+          @app_event.logs.create(level: 'error', text: response_log)
+          @app_event.fail!
           nil
         end
       end
@@ -103,6 +119,20 @@ module OmniAuth
 
       def user_info_url
         "#{options.client_options.site}#{options.client_options.user_info_url}"
+      end
+
+      def finalize_app_event(info)
+        app_event_data = {
+          user_info: {
+            uid: info[:id],
+            first_name: info[:first_name],
+            last_name: info[:last_name],
+            email: info[:email],
+            member_level: info[:member_level]
+          }
+        }
+
+        @app_event.update(raw_data: app_event_data)
       end
     end
   end
