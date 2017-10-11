@@ -67,7 +67,7 @@ module OmniAuth
       end
 
       def get_user_info
-        request_log = "AACD Authentication Request:\nGET #{user_info_url}, params: { token: #{access_token[:token]} }"
+        request_log = "AACD Authentication Request:\nGET #{user_info_url}, params: { token: #{Provider::SECURITY_MASK} }"
         @app_event.logs.create(level: 'info', text: request_log)
 
         response = RestClient.get(user_info_url,
